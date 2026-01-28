@@ -1,0 +1,68 @@
+{
+  "name": "agentqa",
+  "version": "1.0.0",
+  "description": "AI-powered automated QA testing orchestration tool - generate, run, and heal tests with LLMs",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "agentqa": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/server.ts",
+    "start": "node dist/server.js",
+    "cli": "tsx src/cli.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build && npm run test"
+  },
+  "keywords": [
+    "testing",
+    "qa",
+    "ai",
+    "automation",
+    "jest",
+    "vitest",
+    "pytest",
+    "llm",
+    "openai",
+    "test-generation",
+    "test-automation",
+    "ai-testing",
+    "developer-tools",
+    "cli"
+  ],
+  "author": "natmart",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/natmart/agentqa.git"
+  },
+  "homepage": "https://github.com/natmart/agentqa#readme",
+  "bugs": {
+    "url": "https://github.com/natmart/agentqa/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "dependencies": {
+    "@hono/node-server": "^1.13.1",
+    "commander": "^12.1.0",
+    "glob": "^11.0.0",
+    "hono": "^4.6.3",
+    "openai": "^4.67.3",
+    "picocolors": "^1.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.4",
+    "stripe": "^17.3.1",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.2",
+    "vitest": "^2.1.2"
+  }
+}

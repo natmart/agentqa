@@ -1,0 +1,46 @@
+# Source files (dist is published)
+src/
+
+# Development files
+.design/
+.github/
+.planning/
+beta/
+marketing/
+landing/
+public/
+
+# Test files
+**/*.test.ts
+**/*.spec.ts
+coverage/
+vitest.config.ts
+
+# Build config
+tsconfig.json
+
+# Environment & local
+.env
+.env.example
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+
+# Misc
+*.log
+*.tmp
+.cache/
+*.tgz
+.DS_Store
+
+# GitHub Actions
+action.yml

@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AgentQA - AI-Powered Test Generation</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes gradient {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+    .gradient-bg {
+      background: linear-gradient(-45deg, #0f172a, #1e3a5f, #0f172a, #1a3350);
+      background-size: 400% 400%;
+      animation: gradient 15s ease infinite;
+    }
+    .code-block {
+      background: #1e293b;
+      border-radius: 8px;
+      padding: 1rem;
+      overflow-x: auto;
+    }
+    .code-block code {
+      color: #e2e8f0;
+      font-family: 'Monaco', 'Menlo', monospace;
+      font-size: 0.875rem;
+    }
+    .typing-effect {
+      overflow: hidden;
+      white-space: pre-wrap;
+      animation: typing 0.5s steps(40, end);
+    }
+    @keyframes typing {
+      from { max-height: 0; }
+      to { max-height: 500px; }
+    }
+  </style>
+</head>
+<body class="gradient-bg min-h-screen text-white">
+  <!-- Hero Section -->
+  <div class="container mx-auto px-4 py-16">
+    <nav class="flex justify-between items-center mb-16">
+      <div class="flex items-center gap-2">
+        <span class="text-3xl">🤖</span>
+        <span class="text-2xl font-bold">AgentQA</span>
+      </div>
+      <div class="flex gap-6">
+        <a href="#features" class="hover:text-blue-400 transition">Features</a>
+        <a href="#demo" class="hover:text-blue-400 transition">Demo</a>
+        <a href="#api" class="hover:text-blue-400 transition">API</a>
+        <a href="https://github.com" class="bg-blue-600 px-4 py-2 rounded-lg hover:bg-blue-700 transition">GitHub</a>
+      </div>
+    </nav>
+
+    <div class="text-center max-w-4xl mx-auto">
+      <h1 class="text-5xl md:text-6xl font-bold mb-6">
+        AI-Powered <span class="text-blue-400">Test Generation</span>
+      </h1>
+      <p class="text-xl text-gray-300 mb-8">
+        Scan your codebase, generate tests automatically with AI, and track coverage. 
+        Works with Jest, Vitest, and Pytest.
+      </p>
+      <div class="flex gap-4 justify-center">
+        <button onclick="scrollToDemo()" class="bg-blue-600 px-8 py-3 rounded-lg text-lg font-semibold hover:bg-blue-700 transition">
+          Try Demo
+        </button>
+        <a href="#install" class="border border-gray-500 px-8 py-3 rounded-lg text-lg font-semibold hover:bg-gray-800 transition">
+          Get Started
+        </a>
+      </div>
+    </div>
+
+    <!-- Features -->
+    <section id="features" class="mt-32 grid md:grid-cols-3 gap-8">
+      <div class="bg-slate-800/50 p-6 rounded-xl">
+        <div class="text-4xl mb-4">🔍</div>
+        <h3 class="text-xl font-bold mb-2">Smart Scanning</h3>
+        <p class="text-gray-400">Analyzes your codebase to find untested functions, classes, and exports. Prioritizes by importance.</p>
+      </div>
+      <div class="bg-slate-800/50 p-6 rounded-xl">
+        <div class="text-4xl mb-4">🤖</div>
+        <h3 class="text-xl font-bold mb-2">AI Test Generation</h3>
+        <p class="text-gray-400">Uses GPT-4 to write comprehensive tests with edge cases, mocking, and proper assertions.</p>
+      </div>
+      <div class="bg-slate-800/50 p-6 rounded-xl">
+        <div class="text-4xl mb-4">📊</div>
+        <h3 class="text-xl font-bold mb-2">Coverage Reports</h3>
+        <p class="text-gray-400">Run tests and get instant coverage reports. Track lines, branches, and functions covered.</p>
+      </div>
+      <div class="bg-slate-800/50 p-6 rounded-xl">
+        <div class="text-4xl mb-4">🔌</div>
+        <h3 class="text-xl font-bold mb-2">CI Integration</h3>
+        <p class="text-gray-400">REST API for seamless integration with GitHub Actions, GitLab CI, and other pipelines.</p>
+      </div>
+      <div class="bg-slate-800/50 p-6 rounded-xl">
+        <div class="text-4xl mb-4">⚡</div>
+        <h3 class="text-xl font-bold mb-2">Multi-Framework</h3>
+        <p class="text-gray-400">Supports Jest, Vitest, and Pytest out of the box. Framework detection is automatic.</p>
+      </div>
+      <div class="bg-slate-800/50 p-6 rounded-xl">
+        <div class="text-4xl mb-4">🎯</div>
+        <h3 class="text-xl font-bold mb-2">Smart Prioritization</h3>
+        <p class="text-gray-400">Focuses on exported functions and complex code first. Tests what matters most.</p>
+      </div>
+    </section>
+
+    <!-- Demo Section -->
+    <section id="demo" class="mt-32">
+      <h2 class="text-3xl font-bold text-center mb-8">Try It Live</h2>
+      <div class="max-w-4xl mx-auto bg-slate-800/70 rounded-xl p-6">
+        <div class="flex gap-4 mb-4">
+          <button onclick="runDemo('scan')" class="bg-blue-600 px-4 py-2 rounded hover:bg-blue-700">
+            🔍 Scan Code
+          </button>
+          <button onclick="runDemo('generate')" class="bg-green-600 px-4 py-2 rounded hover:bg-green-700">
+            🤖 Generate Tests
+          </button>
+          <select id="framework" class="bg-slate-700 px-4 py-2 rounded">
+            <option value="vitest">Vitest</option>
+            <option value="jest">Jest</option>
+            <option value="pytest">Pytest</option>
+          </select>
+        </div>
+        
+        <div class="grid md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm text-gray-400 mb-2">Input Code</label>
+            <textarea id="input-code" class="w-full h-64 bg-slate-900 text-green-400 p-4 rounded font-mono text-sm" placeholder="Paste your code here...">export function add(a: number, b: number): number {
+  return a + b;
+}
+
+export function multiply(a: number, b: number): number {
+  return a * b;
+}
+
+export class Calculator {
+  private history: number[] = [];
+
+  calculate(operation: string, a: number, b: number): number {
+    let result: number;
+    switch (operation) {
+      case 'add': result = a + b; break;
+      case 'subtract': result = a - b; break;
+      case 'multiply': result = a * b; break;
+      case 'divide': 
+        if (b === 0) throw new Error('Division by zero');
+        result = a / b; 
+        break;
+      default: throw new Error('Unknown operation');
+    }
+    this.history.push(result);
+    return result;
+  }
+
+  getHistory(): number[] {
+    return [...this.history];
+  }
+}</textarea>
+          </div>
+          <div>
+            <label class="block text-sm text-gray-400 mb-2">Generated Output</label>
+            <div id="output" class="w-full h-64 bg-slate-900 text-blue-400 p-4 rounded font-mono text-sm overflow-auto whitespace-pre-wrap">
+Click "Scan Code" or "Generate Tests" to see results...</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Install Section -->
+    <section id="install" class="mt-32 max-w-3xl mx-auto">
+      <h2 class="text-3xl font-bold text-center mb-8">Quick Start</h2>
+      
+      <div class="space-y-6">
+        <div class="code-block">
+          <code class="text-green-400"># Install globally</code><br>
+          <code>npm install -g agentqa</code><br><br>
+          <code class="text-green-400"># Or use npx</code><br>
+          <code>npx agentqa scan ./src</code>
+        </div>
+        
+        <div class="code-block">
+          <code class="text-green-400"># Scan for untested code</code><br>
+          <code>agentqa scan ./src</code><br><br>
+          <code class="text-green-400"># Generate tests with AI</code><br>
+          <code>agentqa generate ./src --framework vitest</code><br><br>
+          <code class="text-green-400"># Run tests and get coverage</code><br>
+          <code>agentqa run ./src --coverage</code>
+        </div>
+      </div>
+    </section>
+
+    <!-- API Section -->
+    <section id="api" class="mt-32 max-w-3xl mx-auto">
+      <h2 class="text-3xl font-bold text-center mb-8">REST API</h2>
+      <p class="text-center text-gray-400 mb-8">Integrate with your CI/CD pipeline</p>
+      
+      <div class="space-y-4">
+        <div class="bg-slate-800/50 p-4 rounded-lg">
+          <code class="text-blue-400">POST /api/scan</code>
+          <p class="text-gray-400 mt-2">Scan a codebase and get test suggestions</p>
+        </div>
+        <div class="bg-slate-800/50 p-4 rounded-lg">
+          <code class="text-green-400">POST /api/generate</code>
+          <p class="text-gray-400 mt-2">Generate tests for files without coverage</p>
+        </div>
+        <div class="bg-slate-800/50 p-4 rounded-lg">
+          <code class="text-yellow-400">POST /api/run</code>
+          <p class="text-gray-400 mt-2">Run tests and get coverage report</p>
+        </div>
+        <div class="bg-slate-800/50 p-4 rounded-lg">
+          <code class="text-purple-400">POST /api/generate-inline</code>
+          <p class="text-gray-400 mt-2">Generate tests from inline code content</p>
+        </div>
+      </div>
+      
+      <div class="code-block mt-8">
+        <code class="text-green-400"># Example API usage</code><br>
+        <code>curl -X POST http://localhost:3847/api/generate-inline \</code><br>
+        <code>  -H "Content-Type: application/json" \</code><br>
+        <code>  -d '{"filename": "math.ts", "content": "...", "framework": "vitest"}'</code>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="mt-32 text-center text-gray-500 py-8 border-t border-gray-800">
+      <p>Built with 🤖 by AI | MIT License</p>
+    </footer>
+  </div>
+
+  <script>
+    function scrollToDemo() {
+      document.getElementById('demo').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    async function runDemo(action) {
+      const output = document.getElementById('output');
+      const code = document.getElementById('input-code').value;
+      const framework = document.getElementById('framework').value;
+      
+      output.textContent = 'Processing...';
+      
+      if (action === 'scan') {
+        // Simulate scanning
+        const functions = code.match(/(?:export\s+)?(?:async\s+)?function\s+(\w+)/g) || [];
+        const classes = code.match(/(?:export\s+)?class\s+(\w+)/g) || [];
+        
+        const result = {
+          stats: {
+            functions: functions.length,
+            classes: classes.length,
+            hasTests: false
+          },
+          suggestions: [
+            ...functions.map(f => `Test function: ${f.replace(/^.*function\s+/, '')}()`),
+            ...classes.map(c => `Test class: ${c.replace(/^.*class\s+/, '')}`)
+          ]
+        };
+        
+        output.textContent = JSON.stringify(result, null, 2);
+      } else if (action === 'generate') {
+        try {
+          const response = await fetch('/api/generate-inline', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              filename: 'demo.ts',
+              content: code,
+              framework: framework
+            })
+          });
+          
+          const data = await response.json();
+          if (data.success && data.test) {
+            output.textContent = data.test.content;
+          } else {
+            // Fallback template
+            output.textContent = generateTemplate(code, framework);
+          }
+        } catch (e) {
+          // Generate a template locally
+          output.textContent = generateTemplate(code, framework);
+        }
+      }
+    }
+
+    function generateTemplate(code, framework) {
+      const functions = [];
+      const fnMatches = code.matchAll(/(?:export\s+)?(?:async\s+)?function\s+(\w+)/g);
+      for (const m of fnMatches) functions.push(m[1]);
+      
+      const classes = [];
+      const clsMatches = code.matchAll(/(?:export\s+)?class\s+(\w+)/g);
+      for (const m of clsMatches) classes.push(m[1]);
+      
+      if (framework === 'pytest') {
+        return `"""Tests for demo module"""
+import pytest
+
+${functions.map(fn => `
+def test_${fn}():
+    """Test ${fn} function."""
+    # result = ${fn}(...)
+    # assert result == expected
+    pass
+`).join('\n')}
+
+${classes.map(cls => `
+class Test${cls}:
+    """Tests for ${cls} class."""
+    
+    def test_init(self):
+        # instance = ${cls}()
+        # assert instance is not None
+        pass
+`).join('\n')}`;
+      }
+      
+      const vitestImport = framework === 'vitest' 
+        ? "import { describe, it, expect } from 'vitest';\n" 
+        : '';
+      
+      return `${vitestImport}import { ${[...functions, ...classes].join(', ')} } from './demo';
+
+describe('demo', () => {
+${functions.map(fn => `
+  describe('${fn}', () => {
+    it('should work correctly', () => {
+      // const result = ${fn}(...);
+      // expect(result).toBe(expected);
+    });
+    
+    it('should handle edge cases', () => {
+      // Test edge cases here
+    });
+  });
+`).join('\n')}
+});
+
+${classes.map(cls => `
+describe('${cls}', () => {
+  it('should initialize correctly', () => {
+    // const instance = new ${cls}();
+    // expect(instance).toBeDefined();
+  });
+  
+  it('should handle operations', () => {
+    // Test class methods here
+  });
+});
+`).join('\n')}`;
+    }
+  </script>
+</body>
+</html>

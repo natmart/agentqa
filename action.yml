@@ -1,0 +1,292 @@
+name: 'AgentQA'
+description: 'Autonomous QA Engineer - AI-powered test generation, execution, and self-healing'
+author: 'AgentQA Team'
+branding:
+  icon: 'check-circle'
+  color: 'green'
+
+inputs:
+  path:
+    description: 'Path to scan for untested code'
+    required: false
+    default: './src'
+  framework:
+    description: 'Test framework (jest, vitest, pytest)'
+    required: false
+    default: 'vitest'
+  openai-api-key:
+    description: 'OpenAI API key for AI test generation'
+    required: true
+  github-token:
+    description: 'GitHub token for posting PR comments'
+    required: false
+    default: ${{ github.token }}
+  max-retries:
+    description: 'Maximum healing retries per test (1-5)'
+    required: false
+    default: '3'
+  dry-run:
+    description: 'Run without writing files (preview mode)'
+    required: false
+    default: 'false'
+  auto-commit:
+    description: 'Automatically commit generated tests'
+    required: false
+    default: 'true'
+  coverage-threshold:
+    description: 'Fail if coverage drops below this percentage'
+    required: false
+    default: ''
+  limit:
+    description: 'Maximum number of files to process'
+    required: false
+    default: ''
+  model:
+    description: 'OpenAI model to use (gpt-4, gpt-4o, gpt-3.5-turbo)'
+    required: false
+    default: 'gpt-4o'
+  verbose:
+    description: 'Enable verbose logging'
+    required: false
+    default: 'false'
+  post-comment:
+    description: 'Post results as PR comment'
+    required: false
+    default: 'true'
+
+outputs:
+  coverage-before:
+    description: 'Coverage percentage before test generation'
+    value: ${{ steps.run-agentqa.outputs.coverage-before }}
+  coverage-after:
+    description: 'Coverage percentage after test generation'
+    value: ${{ steps.run-agentqa.outputs.coverage-after }}
+  coverage-diff:
+    description: 'Coverage difference (positive = improvement)'
+    value: ${{ steps.run-agentqa.outputs.coverage-diff }}
+  tests-generated:
+    description: 'Number of tests generated'
+    value: ${{ steps.run-agentqa.outputs.tests-generated }}
+  tests-healed:
+    description: 'Number of tests that required healing'
+    value: ${{ steps.run-agentqa.outputs.tests-healed }}
+  healing-success-rate:
+    description: 'Percentage of failed tests successfully healed'
+    value: ${{ steps.run-agentqa.outputs.healing-success-rate }}
+  summary:
+    description: 'Summary of AgentQA run in markdown format'
+    value: ${{ steps.run-agentqa.outputs.summary }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Install AgentQA CLI
+      shell: bash
+      run: |
+        npm install -g agentqa
+        echo "✅ AgentQA CLI installed"
+        agentqa --version || echo "Version check skipped"
+
+    - name: Get baseline coverage
+      id: baseline
+      shell: bash
+      run: |
+        # Try to get existing coverage, default to 0 if none exists
+        BASELINE=$(agentqa run ${{ inputs.path }} --coverage --json 2>/dev/null | jq -r '.coverage // 0' || echo "0")
+        echo "coverage-before=$BASELINE" >> $GITHUB_OUTPUT
+        echo "📊 Baseline coverage: ${BASELINE}%"
+
+    - name: Run AgentQA Auto Pipeline
+      id: run-agentqa
+      shell: bash
+      env:
+        OPENAI_API_KEY: ${{ inputs.openai-api-key }}
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+      run: |
+        # Build command arguments
+        ARGS="${{ inputs.path }}"
+        ARGS="$ARGS --framework ${{ inputs.framework }}"
+        ARGS="$ARGS --max-retries ${{ inputs.max-retries }}"
+        ARGS="$ARGS --model ${{ inputs.model }}"
+        
+        if [ "${{ inputs.dry-run }}" = "true" ]; then
+          ARGS="$ARGS --dry-run"
+        fi
+        
+        if [ "${{ inputs.verbose }}" = "true" ]; then
+          ARGS="$ARGS --verbose"
+        fi
+        
+        if [ -n "${{ inputs.limit }}" ]; then
+          ARGS="$ARGS --limit ${{ inputs.limit }}"
+        fi
+        
+        if [ -n "${{ inputs.coverage-threshold }}" ]; then
+          ARGS="$ARGS --coverage-threshold ${{ inputs.coverage-threshold }}"
+        fi
+        
+        echo "🤖 Running: agentqa auto $ARGS"
+        
+        # Run AgentQA auto pipeline and capture output
+        set +e
+        OUTPUT=$(agentqa auto $ARGS --json 2>&1)
+        EXIT_CODE=$?
+        set -e
+        
+        echo "$OUTPUT"
+        
+        # Parse JSON output for metrics
+        if echo "$OUTPUT" | jq -e . > /dev/null 2>&1; then
+          COVERAGE_BEFORE=$(echo "$OUTPUT" | jq -r '.coverageBefore // 0')
+          COVERAGE_AFTER=$(echo "$OUTPUT" | jq -r '.coverageAfter // 0')
+          COVERAGE_DIFF=$(echo "$OUTPUT" | jq -r '.coverageDiff // 0')
+          TESTS_GENERATED=$(echo "$OUTPUT" | jq -r '.testsGenerated // 0')
+          TESTS_HEALED=$(echo "$OUTPUT" | jq -r '.testsHealed // 0')
+          HEALING_RATE=$(echo "$OUTPUT" | jq -r '.healingSuccessRate // 0')
+        else
+          # Fallback if not JSON
+          COVERAGE_BEFORE="${{ steps.baseline.outputs.coverage-before }}"
+          COVERAGE_AFTER="$COVERAGE_BEFORE"
+          COVERAGE_DIFF="0"
+          TESTS_GENERATED="0"
+          TESTS_HEALED="0"
+          HEALING_RATE="0"
+        fi
+        
+        echo "coverage-before=$COVERAGE_BEFORE" >> $GITHUB_OUTPUT
+        echo "coverage-after=$COVERAGE_AFTER" >> $GITHUB_OUTPUT
+        echo "coverage-diff=$COVERAGE_DIFF" >> $GITHUB_OUTPUT
+        echo "tests-generated=$TESTS_GENERATED" >> $GITHUB_OUTPUT
+        echo "tests-healed=$TESTS_HEALED" >> $GITHUB_OUTPUT
+        echo "healing-success-rate=$HEALING_RATE" >> $GITHUB_OUTPUT
+        
+        # Generate markdown summary
+        SUMMARY="## 🤖 AgentQA Results
+
+        | Metric | Value |
+        |--------|-------|
+        | Coverage Before | ${COVERAGE_BEFORE}% |
+        | Coverage After | ${COVERAGE_AFTER}% |
+        | Coverage Diff | ${COVERAGE_DIFF}% |
+        | Tests Generated | ${TESTS_GENERATED} |
+        | Tests Healed | ${TESTS_HEALED} |
+        | Healing Success Rate | ${HEALING_RATE}% |
+        "
+        
+        # Multi-line output handling
+        echo "summary<<EOF" >> $GITHUB_OUTPUT
+        echo "$SUMMARY" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+        
+        exit $EXIT_CODE
+
+    - name: Commit generated tests
+      if: inputs.auto-commit == 'true' && inputs.dry-run != 'true' && github.event_name == 'pull_request'
+      shell: bash
+      run: |
+        git config --global user.name "AgentQA Bot"
+        git config --global user.email "agentqa[bot]@users.noreply.github.com"
+        
+        # Check if there are changes to commit
+        if git diff --quiet && git diff --cached --quiet; then
+          echo "📝 No changes to commit"
+        else
+          git add -A "**/*.test.ts" "**/*.test.js" "**/*.spec.ts" "**/*.spec.js" "**/test_*.py" "**/*_test.py" 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "📝 No test files to commit"
+          else
+            git commit -m "🤖 Add AI-generated tests via AgentQA
+
+        Coverage: ${{ steps.run-agentqa.outputs.coverage-before }}% → ${{ steps.run-agentqa.outputs.coverage-after }}% (+${{ steps.run-agentqa.outputs.coverage-diff }}%)
+        Tests generated: ${{ steps.run-agentqa.outputs.tests-generated }}
+        Tests healed: ${{ steps.run-agentqa.outputs.tests-healed }}"
+            git push
+            echo "✅ Tests committed and pushed"
+          fi
+        fi
+
+    - name: Post PR Comment
+      if: inputs.post-comment == 'true' && github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const coverageBefore = '${{ steps.run-agentqa.outputs.coverage-before }}';
+          const coverageAfter = '${{ steps.run-agentqa.outputs.coverage-after }}';
+          const coverageDiff = '${{ steps.run-agentqa.outputs.coverage-diff }}';
+          const testsGenerated = '${{ steps.run-agentqa.outputs.tests-generated }}';
+          const testsHealed = '${{ steps.run-agentqa.outputs.tests-healed }}';
+          const healingRate = '${{ steps.run-agentqa.outputs.healing-success-rate }}';
+          
+          const diffNum = parseFloat(coverageDiff) || 0;
+          const emoji = diffNum > 0 ? '📈' : diffNum < 0 ? '📉' : '➡️';
+          const status = diffNum >= 0 ? '✅' : '⚠️';
+          
+          const body = `## 🤖 AgentQA Report
+          
+          ${status} **Coverage ${emoji} ${coverageBefore}% → ${coverageAfter}%** (${diffNum >= 0 ? '+' : ''}${coverageDiff}%)
+          
+          | Metric | Value |
+          |--------|-------|
+          | 📝 Tests Generated | ${testsGenerated} |
+          | 🔧 Tests Healed | ${testsHealed} |
+          | 💪 Healing Success Rate | ${healingRate}% |
+          
+          <details>
+          <summary>What is AgentQA?</summary>
+          
+          AgentQA is an autonomous QA engineer that:
+          1. 🔍 Scans your code for untested functions
+          2. 🤖 Generates tests using AI
+          3. ▶️ Runs the tests
+          4. 🔧 Auto-fixes any failing tests (self-healing loop)
+          
+          [Learn more](https://github.com/agentqa/agentqa)
+          </details>
+          `;
+          
+          // Find existing AgentQA comment
+          const { data: comments } = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+          });
+          
+          const existingComment = comments.find(c => 
+            c.body.includes('🤖 AgentQA Report')
+          );
+          
+          if (existingComment) {
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: existingComment.id,
+              body,
+            });
+          } else {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
+          }
+
+    - name: Add summary to job
+      shell: bash
+      run: |
+        echo "## 🤖 AgentQA Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+        echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Coverage Before | ${{ steps.run-agentqa.outputs.coverage-before }}% |" >> $GITHUB_STEP_SUMMARY
+        echo "| Coverage After | ${{ steps.run-agentqa.outputs.coverage-after }}% |" >> $GITHUB_STEP_SUMMARY
+        echo "| Coverage Diff | ${{ steps.run-agentqa.outputs.coverage-diff }}% |" >> $GITHUB_STEP_SUMMARY
+        echo "| Tests Generated | ${{ steps.run-agentqa.outputs.tests-generated }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Tests Healed | ${{ steps.run-agentqa.outputs.tests-healed }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Healing Success Rate | ${{ steps.run-agentqa.outputs.healing-success-rate }}% |" >> $GITHUB_STEP_SUMMARY
