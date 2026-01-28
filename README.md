@@ -32,6 +32,9 @@ The self-healing loop:
 - **📊 Coverage Reports** - Run tests and get instant coverage reports
 - **🔌 CI Integration** - REST API for seamless pipeline integration
 - **⚡ Multi-Framework** - Supports Jest, Vitest, and Pytest
+- **🛡️ Test Quality Review** - Analyzes tests for anti-patterns and improvements
+- **🌐 API Test Coverage** - Scans Express/Fastify routes and generates API tests
+- **🚀 Easy Onboarding** - Interactive `init` and `doctor` commands for quick setup
 
 ## Installation
 
@@ -86,6 +89,43 @@ agentqa run ./src --filter "auth"
 
 ```bash
 agentqa gen-file ./src/utils.ts --framework vitest
+```
+
+### Initialize AgentQA in a project
+
+```bash
+# Interactive setup wizard
+agentqa init
+
+# Non-interactive with defaults
+agentqa init --yes
+```
+
+### Diagnose your setup
+
+```bash
+# Check environment and configuration
+agentqa doctor
+```
+
+### Review test quality
+
+```bash
+# Analyze tests for anti-patterns and improvements
+agentqa review ./src --framework vitest
+
+# Output as JSON
+agentqa review ./src --json
+```
+
+### Scan and test API routes
+
+```bash
+# Scan Express/Fastify routes
+agentqa api-scan ./src
+
+# Generate API tests for discovered endpoints
+agentqa api-test ./src --framework vitest
 ```
 
 ## REST API

@@ -1,13 +1,19 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
 import pc from 'picocolors';
-import { writeFile, mkdir } from 'fs/promises';
+import { writeFile, mkdir, readFile } from 'fs/promises';
+import { existsSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { scanCodebase, generateTestSuggestions } from './core/scanner.js';
 import { generateTests, generateTestsForFiles, TestFramework } from './core/generator.js';
 import { runTests, formatTestResult } from './core/runner.js';
 import { generateAndHealTest } from './core/healer.js';
 import { reviewTestFiles, formatReviewReport, formatAsJSON } from './core/quality-reviewer.js';
+import { scanApiRoutes, formatRoutes, groupRoutesByPath } from './core/api-scanner.js';
+import { generateApiTests, type ApiTestGeneratorOptions } from './core/api-tester.js';
+import { runInitWizard } from './cli/init.js';
+import { runDoctor, formatDoctorReport } from './cli/doctor.js';
+import { templates, getTemplate } from './cli/templates.js';
 
 const program = new Command();
 
@@ -368,6 +374,217 @@ program
     } catch (error) {
       console.error(pc.red(`Error reviewing tests: ${error instanceof Error ? error.message : 'Unknown error'}`));
       process.exit(1);
+    }
+  });
+
+// Init command - Interactive setup wizard
+program
+  .command('init')
+  .description('Initialize AgentQA with an interactive setup wizard')
+  .option('-f, --force', 'Overwrite existing configuration')
+  .option('--skip-cicd', 'Skip CI/CD setup prompt')
+  .option('-t, --template <name>', 'Use a specific template (typescript-vitest, typescript-jest, javascript-jest, python-pytest)')
+  .action(async (options: {
+    force?: boolean;
+    skipCicd?: boolean;
+    template?: string;
+  }) => {
+    if (options.template) {
+      // Use template directly
+      const template = getTemplate(options.template);
+      if (!template) {
+        console.log(pc.red(`Unknown template: ${options.template}`));
+        console.log(pc.gray('\nAvailable templates:'));
+        for (const t of templates) {
+          console.log(`  - ${t.name}: ${t.description}`);
+        }
+        process.exit(1);
+      }
+      
+      const configPath = join(process.cwd(), '.agentqa.yml');
+      if (existsSync(configPath) && !options.force) {
+        console.log(pc.yellow('⚠️  A .agentqa.yml file already exists. Use --force to overwrite.'));
+        process.exit(1);
+      }
+      
+      writeFileSync(configPath, template.config);
+      console.log(pc.green(`✅ Created .agentqa.yml using ${template.name} template`));
+      console.log(pc.gray('\nRun "agentqa doctor" to verify your setup.'));
+      return;
+    }
+    
+    await runInitWizard({
+      cwd: process.cwd(),
+      force: options.force,
+      skipCicd: options.skipCicd,
+    });
+  });
+
+// Doctor command - Diagnose setup issues
+program
+  .command('doctor')
+  .description('Diagnose setup issues and verify configuration')
+  .option('-j, --json', 'Output as JSON')
+  .action(async (options: { json?: boolean }) => {
+    const report = await runDoctor(process.cwd());
+    
+    if (options.json) {
+      console.log(JSON.stringify(report, null, 2));
+    } else {
+      console.log(formatDoctorReport(report));
+    }
+    
+    process.exit(report.healthy ? 0 : 1);
+  });
+
+// Templates command - List available templates
+program
+  .command('templates')
+  .description('List available configuration templates')
+  .action(() => {
+    console.log(pc.bold(pc.cyan('\n📋 Available Templates\n')));
+    
+    for (const template of templates) {
+      console.log(`  ${pc.bold(template.name)}`);
+      console.log(`    ${pc.gray(template.description)}`);
+      console.log(`    Type: ${template.projectType}, Framework: ${template.framework}`);
+      console.log('');
+    }
+    
+    console.log(pc.gray('Use: agentqa init --template <name>\n'));
+  });
+
+// API command - Scan for API routes and generate contract tests
+program
+  .command('api')
+  .description('Scan for API routes and generate contract tests')
+  .argument('[path]', 'Path to scan for API routes', '.')
+  .option('-j, --json', 'Output as JSON')
+  .option('-g, --generate', 'Generate API contract tests')
+  .option('-f, --framework <framework>', 'Test framework (jest|vitest|pytest)', 'vitest')
+  .option('-c, --client <client>', 'HTTP client (fetch|supertest|axios|httpx)', 'supertest')
+  .option('-b, --base-url <url>', 'Base URL for API tests', 'http://localhost:3000')
+  .option('-o, --output <dir>', 'Output directory for generated tests')
+  .option('--dry-run', 'Show what would be generated without writing files')
+  .option('--api-key <key>', 'OpenAI API key for AI-powered generation')
+  .option('--model <model>', 'AI model to use', 'gpt-4o-mini')
+  .action(async (path: string, options: {
+    json?: boolean;
+    generate?: boolean;
+    framework: string;
+    client: string;
+    baseUrl: string;
+    output?: string;
+    dryRun?: boolean;
+    apiKey?: string;
+    model?: string;
+  }) => {
+    console.log(pc.cyan('🔍 Scanning for API routes...\n'));
+    
+    const result = await scanApiRoutes(path);
+    
+    if (result.routes.length === 0) {
+      console.log(pc.yellow('⚠️  No API routes found.'));
+      console.log(pc.gray('\nSupported frameworks: Express, Hono, Next.js, Fastify'));
+      console.log(pc.gray('Make sure your route files are in the scanned path.'));
+      return;
+    }
+    
+    if (options.json && !options.generate) {
+      console.log(JSON.stringify({
+        stats: result.stats,
+        routes: result.routes.map(r => ({
+          method: r.method,
+          path: r.path,
+          file: r.file,
+          line: r.line,
+          framework: r.framework,
+          parameters: r.parameters,
+        })),
+        hasOpenApiSpec: !!result.openApiSpec,
+      }, null, 2));
+      return;
+    }
+    
+    // Display scan results
+    console.log(pc.bold('📊 API Route Statistics:'));
+    console.log(`   Total routes:   ${pc.green(String(result.stats.total))}`);
+    console.log(`   Files scanned:  ${result.stats.filesScanned}`);
+    
+    // Methods breakdown
+    const methodCounts = Object.entries(result.stats.byMethod)
+      .filter(([_, count]) => count > 0)
+      .map(([method, count]) => `${method}: ${count}`)
+      .join(', ');
+    console.log(`   By method:      ${methodCounts}`);
+    
+    // Frameworks breakdown
+    const frameworkCounts = Object.entries(result.stats.byFramework)
+      .map(([fw, count]) => `${fw}: ${count}`)
+      .join(', ');
+    console.log(`   By framework:   ${frameworkCounts}`);
+    
+    if (result.openApiSpec) {
+      console.log(pc.green(`   ✓ OpenAPI spec found`));
+    }
+    
+    // Display routes
+    console.log(pc.bold('\n📋 Discovered Routes:\n'));
+    console.log(formatRoutes(result.routes));
+    
+    // Generate tests if requested
+    if (options.generate) {
+      console.log(pc.cyan('\n🤖 Generating API contract tests...\n'));
+      
+      const genOptions: ApiTestGeneratorOptions = {
+        framework: options.framework as any,
+        httpClient: options.client as any,
+        baseUrl: options.baseUrl,
+        apiKey: options.apiKey,
+        model: options.model,
+        includeEdgeCases: true,
+      };
+      
+      try {
+        const tests = await generateApiTests(result, genOptions);
+        
+        if (tests.length === 0) {
+          console.log(pc.yellow('No tests generated.'));
+          return;
+        }
+        
+        for (const test of tests) {
+          const outputDir = options.output || join(path, '__tests__', 'api');
+          const outputPath = join(outputDir, test.filename);
+          
+          if (options.dryRun) {
+            console.log(pc.yellow(`Would create: ${outputPath}`));
+            console.log(pc.gray('─'.repeat(60)));
+            const lines = test.content.split('\n');
+            console.log(lines.slice(0, 30).join('\n'));
+            if (lines.length > 30) {
+              console.log(pc.gray(`... (${lines.length - 30} more lines)`));
+            }
+            console.log('');
+          } else {
+            await mkdir(dirname(outputPath), { recursive: true });
+            await writeFile(outputPath, test.content);
+            console.log(pc.green(`✅ Created: ${outputPath}`));
+            console.log(pc.gray(`   Routes: ${test.routes.length}, Framework: ${test.framework}`));
+          }
+        }
+        
+        if (options.dryRun) {
+          console.log(pc.yellow('\n⚠️  Dry run - no files were written'));
+        } else {
+          console.log(pc.green(`\n🎉 Generated ${tests.length} API test file(s)!`));
+        }
+      } catch (error) {
+        console.error(pc.red(`Error generating tests: ${error instanceof Error ? error.message : 'Unknown error'}`));
+        process.exit(1);
+      }
+    } else {
+      console.log(pc.gray('\nTip: Use --generate to create API contract tests'));
     }
   });
 

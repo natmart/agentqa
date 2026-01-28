@@ -8,4 +8,11 @@ export type { GeneratedTest, GeneratorOptions, TestFramework } from './core/gene
 export { runTests, formatTestResult } from './core/runner.js';
 export type { TestResult, CoverageResult, RunOptions } from './core/runner.js';
 
+// API Test Coverage
+export { scanApiRoutes, formatRoutes, groupRoutesByPath } from './core/api-scanner.js';
+export type { ApiRoute, ApiScanResult, OpenApiSpec, HttpMethod, RouteParameter } from './core/api-scanner.js';
+
+export { generateApiTests, generateFromOpenApi, validateResponse } from './core/api-tester.js';
+export type { GeneratedApiTest, ApiTestGeneratorOptions } from './core/api-tester.js';
+
 export { api } from './api/routes.js';

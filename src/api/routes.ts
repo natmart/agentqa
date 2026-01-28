@@ -4,6 +4,8 @@ import { scanCodebase, generateTestSuggestions } from '../core/scanner.js';
 import { generateTests, generateTestsForFiles, TestFramework } from '../core/generator.js';
 import { runTests } from '../core/runner.js';
 import { reviewTestFiles, reviewTestFile, type ReviewOptions, type RuleCategory, type Severity } from '../core/quality-reviewer.js';
+import { scanApiRoutes, type ApiRoute } from '../core/api-scanner.js';
+import { generateApiTests, generateFromOpenApi, type ApiTestGeneratorOptions } from '../core/api-tester.js';
 import {
   isStripeConfigured,
   createCheckoutSession,
@@ -320,6 +322,181 @@ api.post('/generate-inline', async (c) => {
     return c.json({
       success: false,
       error: error instanceof Error ? error.message : 'Generation failed',
+    }, 500);
+  }
+});
+
+// ============================================
+// API Test Coverage Routes
+// ============================================
+
+/**
+ * POST /api-routes/scan
+ * Scan a codebase for API routes
+ */
+api.post('/api-routes/scan', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { path = process.cwd() } = body;
+
+    const result = await scanApiRoutes(path);
+
+    return c.json({
+      success: true,
+      stats: result.stats,
+      routes: result.routes.map((r: ApiRoute) => ({
+        method: r.method,
+        path: r.path,
+        file: r.file,
+        line: r.line,
+        framework: r.framework,
+        parameters: r.parameters,
+        middleware: r.middleware,
+        description: r.description,
+      })),
+      hasOpenApiSpec: !!result.openApiSpec,
+    });
+  } catch (error) {
+    return c.json({
+      success: false,
+      error: error instanceof Error ? error.message : 'API route scan failed',
+    }, 500);
+  }
+});
+
+/**
+ * POST /api-tests
+ * Generate API contract tests for scanned routes
+ */
+api.post('/api-tests', async (c) => {
+  try {
+    const body = await c.req.json();
+    const {
+      path = process.cwd(),
+      framework = 'vitest',
+      httpClient = 'supertest',
+      baseUrl = 'http://localhost:3000',
+      apiKey,
+      model = 'gpt-4o-mini',
+      includeAuth = false,
+      includeEdgeCases = true,
+      includeMocking = false,
+    } = body;
+
+    // Validate framework
+    if (!['jest', 'vitest', 'pytest'].includes(framework)) {
+      return c.json({
+        success: false,
+        error: 'Invalid framework. Use jest, vitest, or pytest.',
+      }, 400);
+    }
+
+    // Validate HTTP client
+    if (!['fetch', 'supertest', 'axios', 'httpx'].includes(httpClient)) {
+      return c.json({
+        success: false,
+        error: 'Invalid httpClient. Use fetch, supertest, axios, or httpx.',
+      }, 400);
+    }
+
+    // Scan for API routes
+    const scanResult = await scanApiRoutes(path);
+
+    if (scanResult.routes.length === 0) {
+      return c.json({
+        success: true,
+        tests: [],
+        message: 'No API routes found in the specified path',
+        hint: 'Supported frameworks: Express, Hono, Next.js, Fastify',
+      });
+    }
+
+    // Generate tests
+    const options: ApiTestGeneratorOptions = {
+      framework,
+      httpClient,
+      baseUrl,
+      apiKey,
+      model,
+      includeAuth,
+      includeEdgeCases,
+      includeMocking,
+    };
+
+    const tests = await generateApiTests(scanResult, options);
+
+    return c.json({
+      success: true,
+      stats: scanResult.stats,
+      tests: tests.map(t => ({
+        filename: t.filename,
+        framework: t.framework,
+        httpClient: t.httpClient,
+        content: t.content,
+        routeCount: t.routes.length,
+        routes: t.routes.map(r => `${r.method} ${r.path}`),
+        description: t.description,
+      })),
+    });
+  } catch (error) {
+    return c.json({
+      success: false,
+      error: error instanceof Error ? error.message : 'API test generation failed',
+    }, 500);
+  }
+});
+
+/**
+ * POST /api-tests/from-openapi
+ * Generate API tests from an OpenAPI/Swagger spec
+ */
+api.post('/api-tests/from-openapi', async (c) => {
+  try {
+    const body = await c.req.json();
+    const {
+      spec,
+      framework = 'vitest',
+      httpClient = 'supertest',
+      baseUrl = 'http://localhost:3000',
+      apiKey,
+      model = 'gpt-4o-mini',
+      includeEdgeCases = true,
+    } = body;
+
+    if (!spec || !spec.openapi || !spec.paths) {
+      return c.json({
+        success: false,
+        error: 'Invalid OpenAPI spec. Must include openapi version and paths.',
+      }, 400);
+    }
+
+    const options: ApiTestGeneratorOptions = {
+      framework,
+      httpClient,
+      baseUrl,
+      apiKey,
+      model,
+      includeEdgeCases,
+    };
+
+    const tests = await generateFromOpenApi(spec, options);
+
+    return c.json({
+      success: true,
+      tests: tests.map(t => ({
+        filename: t.filename,
+        framework: t.framework,
+        httpClient: t.httpClient,
+        content: t.content,
+        routeCount: t.routes.length,
+        routes: t.routes.map(r => `${r.method} ${r.path}`),
+        description: t.description,
+      })),
+    });
+  } catch (error) {
+    return c.json({
+      success: false,
+      error: error instanceof Error ? error.message : 'OpenAPI test generation failed',
     }, 500);
   }
 });
